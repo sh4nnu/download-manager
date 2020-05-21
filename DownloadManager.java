@@ -4,7 +4,8 @@ import java.net.*;
 import java.util.*;
 import javax.swing.*;
 import javax.swing.event.*;
- 
+import java.sql.*;
+
 // The Download Manager.
 public class DownloadManager extends JFrame
         implements Observer {
@@ -14,7 +15,8 @@ public class DownloadManager extends JFrame
      
     // Download table's data model.
     private DownloadsTableModel tableModel;
-     
+    private HistoryTableModel hisTableModel;
+
     // Table listing downloads.
     private JTable table;
      
@@ -46,6 +48,7 @@ public class DownloadManager extends JFrame
         // Set up file menu.
         JMenuBar menuBar = new JMenuBar();
         JMenu fileMenu = new JMenu("File");
+        JButton history = new JButton("History");
         fileMenu.setMnemonic(KeyEvent.VK_F);
         JMenuItem fileExitMenuItem = new JMenuItem("Exit",
                 KeyEvent.VK_X);
@@ -54,8 +57,14 @@ public class DownloadManager extends JFrame
                 actionExit();
             }
         });
+        history.addActionListener(new ActionListener() {
+            public void actionPerformed(ActionEvent e) {
+                HistoryManager history = new HistoryManager();
+            }
+        });
         fileMenu.add(fileExitMenuItem);
         menuBar.add(fileMenu);
+        menuBar.add(history);
         setJMenuBar(menuBar);
          
         // Set up add panel.
@@ -148,9 +157,17 @@ public class DownloadManager extends JFrame
      
     // Add a new download.
     private void actionAdd() {
+        String url = addTextField.getText();
         URL verifiedUrl = verifyUrl(addTextField.getText());
         if (verifiedUrl != null) {
-            tableModel.addDownload(new Download(verifiedUrl));
+            Download d = new  Download(verifiedUrl);
+            String currentDirectory = System.getProperty("user.dir");
+            String filename = d.getFileName(verifiedUrl);
+            currentDirectory = currentDirectory + filename;
+            String initTime = d.getInitTime();
+            historyAdd(currentDirectory,initTime, d.getElapsedTime(), d.getSize(), url);
+            tableModel.addDownload(d);
+
             addTextField.setText(""); // reset add text field
         } else {
             JOptionPane.showMessageDialog(this,
@@ -158,7 +175,29 @@ public class DownloadManager extends JFrame
                     JOptionPane.ERROR_MESSAGE);
         }
     }
-     
+
+    private void historyAdd(String path, String init,String eTime,  long size, String url) {
+        try {
+            Class.forName("com.mysql.jdbc.Driver"); // (1)
+            Connection con = DriverManager.getConnection("jdbc:mysql://localhost:3306/downloadmgr", "root", "asdf;lkj"); // (2)
+            Statement st = con.createStatement();
+            ResultSet rs = st.executeQuery("Select sno from history");
+            int c = 0;
+            while (rs.next()) {
+                c = rs.getInt("sno");
+            }
+            c = c + 1;
+            String insert = "Insert into history(sno, url, size, etime, location, time) values(" + c + ", '" + url
+                    + "'," + size + ", '" + eTime + "', '" + path + "', '" + init + "')";
+            st.executeUpdate(insert);
+        } catch (Exception e) {
+            //TODO: handle exception
+        }
+        
+
+
+    }
+
     // Verify download URL.
     private URL verifyUrl(String url) {
         // Only allow HTTP URLs.
@@ -275,6 +314,8 @@ public class DownloadManager extends JFrame
     // Run the Download Manager.
     public static void main(String[] args) {
         DownloadManager manager = new DownloadManager();
+        ImageIcon img = new ImageIcon("icon.png");
+        manager.setIconImage(img.getImage());
         manager.show();
     }
 }
